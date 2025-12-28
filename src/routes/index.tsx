@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useRef, useEffect } from "react";
+import { Streamdown } from "streamdown";
 
 type Message = {
   id: string;
@@ -145,11 +146,15 @@ function ChatApp() {
                     💭 Thinking {showThinking[message.id] ? "▼" : "▶"}
                   </button>
                   {showThinking[message.id] && (
-                    <div className="thinking-content">{message.thinking}</div>
+                    <div className="thinking-content">
+                      <Streamdown>{message.thinking}</Streamdown>
+                    </div>
                   )}
                 </div>
               )}
-              <div className="message-text">{message.content}</div>
+              <div className="message-text">
+                <Streamdown>{message.content}</Streamdown>
+              </div>
             </div>
           </div>
         ))}
