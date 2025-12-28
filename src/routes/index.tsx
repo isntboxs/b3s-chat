@@ -1,45 +1,66 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useRef, useEffect } from "react";
+import { CopyIcon, RefreshCcwIcon } from "lucide-react";
+import { useState } from "react";
 
-type Message = {
+import {
+  Conversation,
+  ConversationContent,
+  ConversationEmptyState,
+  ConversationScrollButton,
+} from "@/components/ai-elements/conversation";
+import { Loader } from "@/components/ai-elements/loader";
+import {
+  Message,
+  MessageAction,
+  MessageActions,
+  MessageContent,
+  MessageResponse,
+} from "@/components/ai-elements/message";
+import {
+  PromptInput,
+  PromptInputBody,
+  PromptInputFooter,
+  PromptInputSubmit,
+  PromptInputTextarea,
+  PromptInputTools,
+  type PromptInputMessage,
+} from "@/components/ai-elements/prompt-input";
+import {
+  Reasoning,
+  ReasoningContent,
+  ReasoningTrigger,
+} from "@/components/ai-elements/reasoning";
+
+type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
   thinking?: string;
 };
 
+type ChatStatus = "idle" | "submitted" | "streaming";
+
 export const Route = createFileRoute("/")({ component: ChatApp });
 
 function ChatApp() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [status, setStatus] = useState<ChatStatus>("idle");
   const [streamingContent, setStreamingContent] = useState("");
   const [streamingThinking, setStreamingThinking] = useState("");
-  const [showThinking, setShowThinking] = useState<Record<string, boolean>>({});
-  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  const handleSubmit = async (message: PromptInputMessage) => {
+    if (!message.text?.trim() || status !== "idle") return;
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, streamingContent]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isLoading) return;
-
-    const userMessage: Message = {
+    const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
       role: "user",
-      content: input.trim(),
+      content: message.text.trim(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
-    setIsLoading(true);
+    setStatus("submitted");
     setStreamingContent("");
     setStreamingThinking("");
 
@@ -64,6 +85,8 @@ function ChatApp() {
 
       let fullContent = "";
       let fullThinking = "";
+
+      setStatus("streaming");
 
       while (true) {
         const { done, value } = await reader.read();
@@ -94,7 +117,7 @@ function ChatApp() {
         }
       }
 
-      const assistantMessage: Message = {
+      const assistantMessage: ChatMessage = {
         id: crypto.randomUUID(),
         role: "assistant",
         content: fullContent,
@@ -105,101 +128,116 @@ function ChatApp() {
     } catch (error) {
       console.error("Chat error:", error);
     } finally {
-      setIsLoading(false);
+      setStatus("idle");
       setStreamingContent("");
       setStreamingThinking("");
     }
   };
 
-  const toggleThinking = (id: string) => {
-    setShowThinking((prev) => ({ ...prev, [id]: !prev[id] }));
+  const handleRegenerate = async () => {
+    if (messages.length < 2) return;
+
+    // Remove last assistant message and regenerate
+    const newMessages = messages.slice(0, -1);
+    const lastUserMessage = newMessages[newMessages.length - 1];
+
+    if (lastUserMessage?.role !== "user") return;
+
+    setMessages(newMessages);
+    await handleSubmit({ text: lastUserMessage.content, files: [] });
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
   };
 
   return (
-    <div className="chat-container">
-      <div className="chat-header">
-        <h1>💬 Ollama Chat</h1>
-        <span className="model-badge">gpt-oss:120b</span>
-      </div>
+    <div className="flex flex-col h-screen max-w-4xl mx-auto p-6">
+      <Conversation className="h-full">
+        <ConversationContent>
+          {messages.length === 0 && (
+            <ConversationEmptyState
+              icon={<span className="text-4xl">🤖</span>}
+              title="Ollama Chat"
+              description="Start a conversation with the AI"
+            />
+          )}
 
-      <div className="messages-container">
-        {messages.length === 0 && (
-          <div className="empty-state">
-            <div className="empty-icon">🤖</div>
-            <p>Start a conversation with the AI</p>
-          </div>
-        )}
-
-        {messages.map((message) => (
-          <div key={message.id} className={`message ${message.role}`}>
-            <div className="message-avatar">
-              {message.role === "user" ? "👤" : "🤖"}
-            </div>
-            <div className="message-content">
-              {message.thinking && (
-                <div className="thinking-section">
-                  <button
-                    className="thinking-toggle"
-                    onClick={() => toggleThinking(message.id)}
-                  >
-                    💭 Thinking {showThinking[message.id] ? "▼" : "▶"}
-                  </button>
-                  {showThinking[message.id] && (
-                    <div className="thinking-content">{message.thinking}</div>
-                  )}
-                </div>
+          {messages.map((message, index) => (
+            <div key={message.id}>
+              {/* Reasoning section for assistant messages */}
+              {message.role === "assistant" && message.thinking && (
+                <Reasoning isStreaming={false}>
+                  <ReasoningTrigger />
+                  <ReasoningContent>{message.thinking}</ReasoningContent>
+                </Reasoning>
               )}
-              <div className="message-text">{message.content}</div>
-            </div>
-          </div>
-        ))}
 
-        {isLoading && (
-          <div className="message assistant streaming">
-            <div className="message-avatar">🤖</div>
-            <div className="message-content">
-              {streamingThinking && (
-                <div className="thinking-section">
-                  <button
-                    className="thinking-toggle"
-                    onClick={() => toggleThinking("streaming")}
-                  >
-                    💭 Thinking {showThinking["streaming"] ? "▼" : "▶"}
-                  </button>
-                  {showThinking["streaming"] && (
-                    <div className="thinking-content">{streamingThinking}</div>
-                  )}
-                </div>
-              )}
-              <div className="message-text">
-                {streamingContent || (
-                  <span className="typing-indicator">●●●</span>
+              {/* Message content */}
+              <Message from={message.role}>
+                <MessageContent>
+                  <MessageResponse>{message.content}</MessageResponse>
+                </MessageContent>
+
+                {/* Actions for assistant messages */}
+                {message.role === "assistant" && (
+                  <MessageActions>
+                    {index === messages.length - 1 && (
+                      <MessageAction onClick={handleRegenerate} label="Retry">
+                        <RefreshCcwIcon className="size-3" />
+                      </MessageAction>
+                    )}
+                    <MessageAction
+                      onClick={() => copyToClipboard(message.content)}
+                      label="Copy"
+                    >
+                      <CopyIcon className="size-3" />
+                    </MessageAction>
+                  </MessageActions>
                 )}
-              </div>
+              </Message>
             </div>
-          </div>
-        )}
+          ))}
 
-        <div ref={messagesEndRef} />
-      </div>
+          {/* Streaming state */}
+          {status !== "idle" && (
+            <>
+              {streamingThinking && (
+                <Reasoning isStreaming={status === "streaming"}>
+                  <ReasoningTrigger />
+                  <ReasoningContent>{streamingThinking}</ReasoningContent>
+                </Reasoning>
+              )}
 
-      <form className="chat-input-form" onSubmit={handleSubmit}>
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Type your message..."
-          disabled={isLoading}
-          className="chat-input"
-        />
-        <button
-          type="submit"
-          disabled={isLoading || !input.trim()}
-          className="send-button"
-        >
-          {isLoading ? "..." : "Send"}
-        </button>
-      </form>
+              {streamingContent ? (
+                <Message from="assistant">
+                  <MessageContent>
+                    <MessageResponse>{streamingContent}</MessageResponse>
+                  </MessageContent>
+                </Message>
+              ) : (
+                status === "submitted" && <Loader />
+              )}
+            </>
+          )}
+        </ConversationContent>
+        <ConversationScrollButton />
+      </Conversation>
+
+      <PromptInput onSubmit={handleSubmit} className="mt-4">
+        <PromptInputBody>
+          <PromptInputTextarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Type your message..."
+            disabled={status !== "idle"}
+          />
+        </PromptInputBody>
+        <PromptInputFooter>
+          <PromptInputTools />
+          <PromptInputSubmit disabled={!input.trim()} />
+        </PromptInputFooter>
+      </PromptInput>
     </div>
   );
 }
