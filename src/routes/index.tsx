@@ -1,6 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { CopyIcon, RefreshCcwIcon } from "lucide-react";
+import { CopyIcon, RefreshCcwIcon, Sun, Moon, Monitor } from "lucide-react";
 import { useState } from "react";
+
+import { AppSidebar } from "@/components/app-sidebar";
+import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
+import { useTheme } from "@/components/providers/theme-provider";
+import { Button } from "@/components/ui/button";
 
 import {
   Conversation,
@@ -48,6 +53,7 @@ function ChatApp() {
   const [status, setStatus] = useState<ChatStatus>("idle");
   const [streamingContent, setStreamingContent] = useState("");
   const [streamingThinking, setStreamingThinking] = useState("");
+  const { theme, setTheme } = useTheme();
 
   const handleSubmit = async (message: PromptInputMessage) => {
     if (!message.text?.trim() || status !== "idle") return;
@@ -152,92 +158,129 @@ function ChatApp() {
   };
 
   return (
-    <div className="flex flex-col h-screen max-w-4xl mx-auto p-6">
-      <Conversation className="h-full">
-        <ConversationContent>
-          {messages.length === 0 && (
-            <ConversationEmptyState
-              icon={<span className="text-4xl">🤖</span>}
-              title="Ollama Chat"
-              description="Start a conversation with the AI"
-            />
-          )}
-
-          {messages.map((message, index) => (
-            <div key={message.id}>
-              {/* Reasoning section for assistant messages */}
-              {message.role === "assistant" && message.thinking && (
-                <Reasoning isStreaming={false}>
-                  <ReasoningTrigger />
-                  <ReasoningContent>{message.thinking}</ReasoningContent>
-                </Reasoning>
+    <>
+      <AppSidebar />
+      <SidebarInset>
+        <header className="flex items-center justify-between p-4 border-b border-border">
+          <div className="flex items-center gap-2">
+            <SidebarTrigger />
+            <h1 className="font-semibold">Marv Chat</h1>
+          </div>
+          <div className="flex items-center gap-1">
+            <Button
+              variant={theme === "light" ? "secondary" : "ghost"}
+              size="icon"
+              onClick={() => setTheme("light")}
+              title="Light mode"
+            >
+              <Sun className="size-4" />
+            </Button>
+            <Button
+              variant={theme === "dark" ? "secondary" : "ghost"}
+              size="icon"
+              onClick={() => setTheme("dark")}
+              title="Dark mode"
+            >
+              <Moon className="size-4" />
+            </Button>
+            <Button
+              variant={theme === "system" ? "secondary" : "ghost"}
+              size="icon"
+              onClick={() => setTheme("system")}
+              title="System mode"
+            >
+              <Monitor className="size-4" />
+            </Button>
+          </div>
+        </header>
+        <div className="flex flex-col h-[calc(100vh-65px)] w-full px-6">
+          <Conversation className="h-full">
+            <ConversationContent>
+              {messages.length === 0 && (
+                <ConversationEmptyState
+                  icon={<span className="text-4xl"></span>}
+                  title="Marv Chat"
+                  description="Start a conversation with the AI"
+                />
               )}
 
-              {/* Message content */}
-              <Message from={message.role}>
-                <MessageContent>
-                  <MessageResponse>{message.content}</MessageResponse>
-                </MessageContent>
+              {messages.map((message, index) => (
+                <div key={message.id}>
+                  {/* Reasoning section for assistant messages */}
+                  {message.role === "assistant" && message.thinking && (
+                    <Reasoning isStreaming={false}>
+                      <ReasoningTrigger />
+                      <ReasoningContent>{message.thinking}</ReasoningContent>
+                    </Reasoning>
+                  )}
 
-                {/* Actions for assistant messages */}
-                {message.role === "assistant" && (
-                  <MessageActions>
-                    {index === messages.length - 1 && (
-                      <MessageAction onClick={handleRegenerate} label="Retry">
-                        <RefreshCcwIcon className="size-3" />
-                      </MessageAction>
+                  {/* Message content */}
+                  <Message from={message.role}>
+                    <MessageContent>
+                      <MessageResponse>{message.content}</MessageResponse>
+                    </MessageContent>
+
+                    {/* Actions for assistant messages */}
+                    {message.role === "assistant" && (
+                      <MessageActions>
+                        {index === messages.length - 1 && (
+                          <MessageAction onClick={handleRegenerate} label="Retry">
+                            <RefreshCcwIcon className="size-3" />
+                          </MessageAction>
+                        )}
+                        <MessageAction
+                          onClick={() => copyToClipboard(message.content)}
+                          label="Copy"
+                        >
+                          <CopyIcon className="size-3" />
+                        </MessageAction>
+                      </MessageActions>
                     )}
-                    <MessageAction
-                      onClick={() => copyToClipboard(message.content)}
-                      label="Copy"
-                    >
-                      <CopyIcon className="size-3" />
-                    </MessageAction>
-                  </MessageActions>
-                )}
-              </Message>
-            </div>
-          ))}
+                  </Message>
+                </div>
+              ))}
 
-          {/* Streaming state */}
-          {status !== "idle" && (
-            <>
-              {streamingThinking && (
-                <Reasoning isStreaming={status === "streaming"}>
-                  <ReasoningTrigger />
-                  <ReasoningContent>{streamingThinking}</ReasoningContent>
-                </Reasoning>
+              {/* Streaming state */}
+              {status !== "idle" && (
+                <>
+                  {streamingThinking && (
+                    <Reasoning isStreaming={status === "streaming"}>
+                      <ReasoningTrigger />
+                      <ReasoningContent>{streamingThinking}</ReasoningContent>
+                    </Reasoning>
+                  )}
+
+                  {streamingContent ? (
+                    <Message from="assistant">
+                      <MessageContent>
+                        <MessageResponse>{streamingContent}</MessageResponse>
+                      </MessageContent>
+                    </Message>
+                  ) : (
+                    status === "submitted" && <Loader />
+                  )}
+                </>
               )}
+            </ConversationContent>
+            <ConversationScrollButton />
+          </Conversation>
 
-              {streamingContent ? (
-                <Message from="assistant">
-                  <MessageContent>
-                    <MessageResponse>{streamingContent}</MessageResponse>
-                  </MessageContent>
-                </Message>
-              ) : (
-                status === "submitted" && <Loader />
-              )}
-            </>
-          )}
-        </ConversationContent>
-        <ConversationScrollButton />
-      </Conversation>
-
-      <PromptInput onSubmit={handleSubmit} className="mt-4">
-        <PromptInputBody>
-          <PromptInputTextarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your message..."
-            disabled={status !== "idle"}
-          />
-        </PromptInputBody>
-        <PromptInputFooter>
-          <PromptInputTools />
-          <PromptInputSubmit disabled={!input.trim()} />
-        </PromptInputFooter>
-      </PromptInput>
-    </div>
+          <PromptInput onSubmit={handleSubmit} className="mt-4">
+            <PromptInputBody>
+              <PromptInputTextarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Type your message..."
+                disabled={status !== "idle"}
+              />
+            </PromptInputBody>
+            <PromptInputFooter>
+              <PromptInputTools />
+              <PromptInputSubmit disabled={!input.trim()} />
+            </PromptInputFooter>
+          </PromptInput>
+        </div>
+      </SidebarInset>
+    </>
   );
 }
