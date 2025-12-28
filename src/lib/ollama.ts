@@ -10,12 +10,12 @@ const ollama = new Ollama({
 export type ChatMessage = {
   role: "user" | "assistant" | "system";
   content: string;
-  thinking?: string;
+  thinking?: boolean | "high" | "medium" | "low";
 };
 
 export type StreamChunk = {
   content: string;
-  thinking?: string;
+  thinking?: boolean | "high" | "medium" | "low";
   done: boolean;
 };
 
@@ -26,6 +26,7 @@ export async function* streamChat(
   const ollamaMessages: Message[] = messages.map((m) => ({
     role: m.role,
     content: m.content,
+    think: m.thinking,
   }));
 
   const response = await ollama.chat({
@@ -37,9 +38,9 @@ export async function* streamChat(
 
   for await (const part of response) {
     yield {
-      content: part.message.content || "",
-      thinking: part.message.thinking || undefined,
-      done: part.done || false,
+      content: part.message.content,
+      thinking: part.message.thinking as boolean | "high" | "medium" | "low",
+      done: part.done,
     };
   }
 }
