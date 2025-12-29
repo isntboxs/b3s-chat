@@ -1,11 +1,4 @@
-import { Ollama, type Message } from "ollama";
-
-const ollama = new Ollama({
-  host: "https://ollama.com",
-  headers: {
-    Authorization: "Bearer " + process.env.OLLAMA_API_KEY,
-  },
-});
+import ollama, { type Message } from "ollama";
 
 export type ChatMessage = {
   role: "user" | "assistant" | "system";
@@ -21,7 +14,7 @@ export type StreamChunk = {
 
 export async function* streamChat(
   messages: ChatMessage[],
-  model = "gpt-oss:120b"
+  model = "gpt-oss:120b-cloud"
 ): AsyncGenerator<StreamChunk> {
   const ollamaMessages: Message[] = messages.map((m) => ({
     role: m.role,
