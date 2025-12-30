@@ -25,11 +25,12 @@ function RouteComponent() {
 
       <LeftNavHeader />
       <RigthtNavHeader />
-      {/* <AppHeader /> */}
 
       <SidebarInset>
-        <div className="flex h-full w-full grow flex-col">
-          <Outlet />
+        <div className="flex h-full w-full flex-1 flex-col">
+          <div className="container mx-auto max-w-3xl h-full flex flex-1 flex-col gap-2">
+            <Outlet />
+          </div>
         </div>
       </SidebarInset>
     </SidebarProvider>
