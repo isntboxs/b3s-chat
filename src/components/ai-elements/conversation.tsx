@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { ArrowDownIcon } from "lucide-react";
 import type { ComponentProps } from "react";
@@ -27,15 +28,17 @@ export const ConversationContent = ({
   className,
   ...props
 }: ConversationContentProps) => (
-  <StickToBottom.Content
-    className={cn("flex flex-col gap-8 p-4", className)}
-    {...props}
-  />
+  <ScrollArea className="h-full w-full">
+    <StickToBottom.Content
+      className={cn("flex flex-col gap-8 p-4", className)}
+      {...props}
+    />
+  </ScrollArea>
 );
 
 export type ConversationEmptyStateProps = ComponentProps<"div"> & {
   title?: string;
-  description?: string;
+  description?: React.ReactNode;
   icon?: React.ReactNode;
 };
 

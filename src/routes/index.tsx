@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CopyIcon, RefreshCcwIcon, Sun, Moon, Monitor } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
@@ -36,6 +36,12 @@ import {
   ReasoningTrigger,
 } from "@/components/ai-elements/reasoning";
 
+import { ChatGreeting } from "@/components/ai-elements/chat-greeting";
+import { AIModelSelector } from "@/components/ai-elements/model-selector";
+import { ChatHistoryProvider } from "@/components/providers/chat-history-provider";
+import { useChatHistory } from "@/hooks/use-chat-history";
+import { useAuth } from "@/components/providers/auth-provider";
+
 type ChatMessage = {
   id: string;
   role: "user" | "assistant";
@@ -45,7 +51,13 @@ type ChatMessage = {
 
 type ChatStatus = "idle" | "submitted" | "streaming";
 
-export const Route = createFileRoute("/")({ component: ChatApp });
+export const Route = createFileRoute("/")({ 
+  component: () => (
+    <ChatHistoryProvider>
+      <ChatApp />
+    </ChatHistoryProvider>
+  ),
+});
 
 function ChatApp() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -53,7 +65,41 @@ function ChatApp() {
   const [status, setStatus] = useState<ChatStatus>("idle");
   const [streamingContent, setStreamingContent] = useState("");
   const [streamingThinking, setStreamingThinking] = useState("");
+  const [model, setModel] = useState("gpt-oss:120b-cloud");
   const { theme, setTheme } = useTheme();
+  const { user } = useAuth();
+  const [effectiveTheme, setEffectiveTheme] = useState<"dark" | "light">("dark");
+
+  useEffect(() => {
+    if (theme === "system") {
+      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+      const updateTheme = () => {
+        setEffectiveTheme(mediaQuery.matches ? "dark" : "light");
+      };
+      updateTheme();
+      mediaQuery.addEventListener("change", updateTheme);
+      return () => mediaQuery.removeEventListener("change", updateTheme);
+    } else {
+      setEffectiveTheme(theme);
+    }
+  }, [theme]);
+
+  // If theme is light -> use dark logo (black)
+  // If theme is dark -> use light logo (white)
+  const logoSuffix = effectiveTheme === "light" ? "dark" : "light";
+
+  const { currentSessionId, currentMessages, saveMessage, createNewChat } = useChatHistory();
+
+  // Load messages from current session when it changes
+  useEffect(() => {
+    // Always sync messages from currentMessages state
+    setMessages(currentMessages.map(msg => ({
+      id: msg.id,
+      role: msg.role,
+      content: msg.content,
+      thinking: msg.thinking,
+    })));
+  }, [currentMessages]);
 
   const handleSubmit = async (message: PromptInputMessage) => {
     if (!message.text?.trim() || status !== "idle") return;
@@ -70,6 +116,23 @@ function ChatApp() {
     setStreamingContent("");
     setStreamingThinking("");
 
+    // Create a new session if user is logged in but doesn't have one
+    let sessionId = currentSessionId;
+    if (user && !currentSessionId) {
+      await createNewChat();
+      // Wait a bit for the session to be created
+      await new Promise(resolve => setTimeout(resolve, 500));
+      // The session ID will be updated by the provider
+    }
+
+    // Save user message to database if user is logged in
+    if (user && (currentSessionId || sessionId)) {
+      await saveMessage({
+        role: "user",
+        content: userMessage.content,
+      });
+    }
+
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
@@ -79,6 +142,7 @@ function ChatApp() {
             role: m.role,
             content: m.content,
           })),
+          model,
         }),
       });
 
@@ -108,6 +172,12 @@ function ChatApp() {
 
             try {
               const chunk = JSON.parse(data);
+              
+              if (chunk.error) {
+                console.error("Backend error received:", chunk.error);
+                throw new Error(chunk.error);
+              }
+
               if (chunk.content) {
                 fullContent += chunk.content;
                 setStreamingContent(fullContent);
@@ -116,8 +186,12 @@ function ChatApp() {
                 fullThinking += chunk.thinking;
                 setStreamingThinking(fullThinking);
               }
-            } catch {
-              // Skip invalid JSON
+            } catch (err) {
+               // If it's the error we just threw, rethrow it to be caught by the outer catch
+               if (err instanceof Error && err.message === JSON.parse(data).error) {
+                   throw err;
+               }
+               // Otherwise ignore JSON parse errors
             }
           }
         }
@@ -131,8 +205,26 @@ function ChatApp() {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
+
+      // Save assistant message to database
+      if (user && currentSessionId) {
+        await saveMessage({
+          role: "assistant",
+          content: fullContent,
+          thinking: fullThinking || undefined,
+        });
+      }
     } catch (error) {
       console.error("Chat error:", error);
+      // Show error in the UI as a message if no content was received
+      if (!streamingContent) {
+           const errorMessage: ChatMessage = {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: `Error: ${error instanceof Error ? error.message : "Unknown error occurred"}`,
+          };
+          setMessages((prev) => [...prev, errorMessage]);
+      }
     } finally {
       setStatus("idle");
       setStreamingContent("");
@@ -164,7 +256,12 @@ function ChatApp() {
         <header className="flex items-center justify-between p-4 border-b border-border">
           <div className="flex items-center gap-2">
             <SidebarTrigger />
-            <h1 className="font-semibold">Marv Chat</h1>
+            <img
+              src={`/logo-icon-${logoSuffix}.png`}
+              alt="Marv Chat"
+              className="h-8 w-auto object-contain"
+            />
+            <span className="font-[Poppins] font-medium text-lg tracking-tight ml-1">MarvChat</span>
           </div>
           <div className="flex items-center gap-1">
             <Button
@@ -198,9 +295,15 @@ function ChatApp() {
             <ConversationContent>
               {messages.length === 0 && (
                 <ConversationEmptyState
-                  icon={<span className="text-4xl"></span>}
-                  title="Marv Chat"
-                  description="Start a conversation with the AI"
+                  icon={
+                    <img
+                      src={`/logo-full-${logoSuffix}.png`}
+                      alt="Marv Chat"
+                      className="h-24 w-auto object-contain"
+                    />
+                  }
+                  title=""
+                  description={<ChatGreeting />}
                 />
               )}
 
@@ -275,7 +378,10 @@ function ChatApp() {
               />
             </PromptInputBody>
             <PromptInputFooter>
-              <PromptInputTools />
+              <div className="flex items-center gap-2">
+                <PromptInputTools />
+                <AIModelSelector value={model} onValueChange={setModel} />
+              </div>
               <PromptInputSubmit disabled={!input.trim()} />
             </PromptInputFooter>
           </PromptInput>
