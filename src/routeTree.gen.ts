@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as ApiOllamaChatRouteImport } from './routes/api/ollama-chat'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -21,28 +22,37 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
+const ApiOllamaChatRoute = ApiOllamaChatRouteImport.update({
+  id: '/api/ollama-chat',
+  path: '/api/ollama-chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
+  '/api/ollama-chat': typeof ApiOllamaChatRoute
   '/': typeof AppIndexRoute
 }
 export interface FileRoutesByTo {
+  '/api/ollama-chat': typeof ApiOllamaChatRoute
   '/': typeof AppIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
+  '/api/ollama-chat': typeof ApiOllamaChatRoute
   '/_app/': typeof AppIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/api/ollama-chat' | '/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/_app' | '/_app/'
+  to: '/api/ollama-chat' | '/'
+  id: '__root__' | '/_app' | '/api/ollama-chat' | '/_app/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
+  ApiOllamaChatRoute: typeof ApiOllamaChatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -61,6 +71,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/api/ollama-chat': {
+      id: '/api/ollama-chat'
+      path: '/api/ollama-chat'
+      fullPath: '/api/ollama-chat'
+      preLoaderRoute: typeof ApiOllamaChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -76,6 +93,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
+  ApiOllamaChatRoute: ApiOllamaChatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
